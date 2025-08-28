@@ -4,7 +4,7 @@ A tiny **browser-based agent** that chats with you and can call tools to get stu
 Tools included: **Web Search (Google CSE)**, **JavaScript Sandbox (`js_exec`)**, and **AI Pipe proxy**.  
 Built with a minimal Express server + vanilla JS UI. Deployed easily on **Railway**.
 
-**Live demo:** https://tds-llm-agent-poc-production.up.railway.app/
+**Live App:** https://tds-llm-agent-poc-production.up.railway.app/
 
 ---
 
