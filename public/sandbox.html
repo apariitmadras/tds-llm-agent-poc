@@ -1,11 +1,12 @@
 <!doctype html>
 <html><body>
 <script>
-  // Minimal sandbox: runs code and captures console.log
+  // Minimal sandbox: runs code and captures console via "print"
   (function(){
     function run(code){
       let logs = [];
-      const print = (...a) => logs.push(a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "));
+      const print = (...a) =>
+        logs.push(a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "));
       try {
         const fn = new Function("print", code);
         const result = fn(print);
@@ -16,7 +17,7 @@
     }
     window.addEventListener("message", (ev) => {
       const { id, code } = ev.data || {};
-      if (!id || !code) return;
+      if (!id || typeof code !== "string") return;
       const r = run(code);
       const out = r.ok ? (r.stdout ? r.stdout + "\n" : "") + (r.result ?? "") : "ERROR: " + (r.error || "unknown");
       ev.source.postMessage({ id, result: String(out) }, "*");
