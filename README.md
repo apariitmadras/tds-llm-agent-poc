@@ -9,4 +9,4 @@ Minimal Bootstrap UI with model picker & alerts. Designed for hackability.
 
 ## How it works
 The page sends `messages` + `tools` to an Express proxy (`/api/openai`).  
-The model may return `tool_calls`; the browser runs each tool (`/api/search`, `/api/aipipe`, or sandboxed JS), appends the tool results as `role: "tool"` with `tool_call_id`, and asks the model again. This loop continues until the model stops requesting tools. :contentReference[oaicite:1]{index=1}
+The model may return `tool_calls`; the browser runs each tool (`/api/search`, `/api/aipipe`, or sandboxed JS), appends the tool results as `role: "tool"` with `tool_call_id`, and asks the model again. This loop continues until the model stops requesting tools.
