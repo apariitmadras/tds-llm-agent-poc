@@ -1,3 +1,4 @@
+// public/app.js
 const elMsgs = document.getElementById("messages");
 const elInput = document.getElementById("input");
 const elSend = document.getElementById("send");
@@ -71,7 +72,10 @@ async function callOpenAI() {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ messages, model, tools })
   });
-  if (!r.ok) throw new Error("OpenAI call failed");
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`OpenAI call failed: ${text}`);
+  }
   const data = await r.json();
   return data.choices?.[0]?.message || {};
 }
@@ -124,25 +128,42 @@ async function handleToolCall(tc) {
   }
 }
 
-// Core loop: ask model → execute tool_calls (if any) → feed results back → stop when none
+// Core loop: ask model → if assistant returns tool_calls, send tool results back → repeat
 async function agentTurn() {
   const assistantMsg = await callOpenAI();
 
-  if (assistantMsg.content) add("assistant", assistantMsg.content);
+  // ✅ IMPORTANT: push the assistant message (with tool_calls) BEFORE sending tool results
+  const envelope = {
+    role: "assistant",
+    content: assistantMsg.content ?? null
+  };
+  if (Array.isArray(assistantMsg.tool_calls) && assistantMsg.tool_calls.length) {
+    envelope.tool_calls = assistantMsg.tool_calls;
+  }
+  messages.push(envelope);
 
-  if (assistantMsg.tool_calls?.length) {
+  if (assistantMsg.content?.trim()) add("assistant", assistantMsg.content);
+
+  if (Array.isArray(assistantMsg.tool_calls) && assistantMsg.tool_calls.length) {
+    const MAX_TOOL_CHARS = 12000; // keep context safe
     for (const tc of assistantMsg.tool_calls) {
       const toolResult = await handleToolCall(tc);
+
+      // Send back tool result linked to the tool_call_id
       messages.push({
         role: "tool",
         tool_call_id: tc.id,
-        content: toolResult
+        content: String(toolResult).slice(0, MAX_TOOL_CHARS)
       });
-      add("tool", toolResult.slice(0, 800));
+
+      // UI preview
+      add("tool", String(toolResult).slice(0, 800));
     }
-    // Ask model again with tool results
-    await agentTurn();
+    // Ask the model again with the tool outputs included
+    return agentTurn();
   }
+
+  // No tool calls; turn ends here.
 }
 
 elSend.onclick = async () => {
@@ -157,3 +178,10 @@ elSend.onclick = async () => {
     alertError(e.message);
   }
 };
+
+// (optional) enter key to send
+elInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    elSend.click();
+  }
+});
