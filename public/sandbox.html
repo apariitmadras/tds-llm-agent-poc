@@ -1,0 +1,26 @@
+<!doctype html>
+<html><body>
+<script>
+  // Minimal sandbox: runs code and captures console.log
+  (function(){
+    function run(code){
+      let logs = [];
+      const print = (...a) => logs.push(a.map(x => typeof x === "object" ? JSON.stringify(x) : String(x)).join(" "));
+      try {
+        const fn = new Function("print", code);
+        const result = fn(print);
+        return { ok: true, stdout: logs.join("\n"), result };
+      } catch (e) {
+        return { ok: false, error: e.message, stdout: logs.join("\n") };
+      }
+    }
+    window.addEventListener("message", (ev) => {
+      const { id, code } = ev.data || {};
+      if (!id || !code) return;
+      const r = run(code);
+      const out = r.ok ? (r.stdout ? r.stdout + "\n" : "") + (r.result ?? "") : "ERROR: " + (r.error || "unknown");
+      ev.source.postMessage({ id, result: String(out) }, "*");
+    });
+  })();
+</script>
+</body></html>
