@@ -4,28 +4,36 @@ const elSend = document.getElementById("send");
 const elModel = document.getElementById("model");
 const elAlerts = document.getElementById("alerts");
 
-let messages = [{ role: "system", content:
-  "You are a helpful agent. Use tools when needed. Keep answers brief."
+let messages = [{
+  role: "system",
+  content: "You are a concise assistant. Use tools when needed. Prefer factual answers."
 }];
 
-// Tool schemas (OpenAI function-calling interface)
+// OpenAI tool/function schemas
 const tools = [
   {
     type: "function",
     function: {
       name: "search",
-      description: "Google Search snippets",
-      parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }
+      description: "Return Google search snippets for a query",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Search query" } },
+        required: ["query"]
+      }
     }
   },
   {
     type: "function",
     function: {
       name: "aipipe",
-      description: "Call AI Pipe proxy with a payload",
+      description: "Call an AI Pipe proxy with a path and payload",
       parameters: {
         type: "object",
-        properties: { path: { type: "string" }, payload: { type: "object" } }
+        properties: {
+          path: { type: "string", description: "Relative API path, e.g. /run" },
+          payload: { type: "object", description: "Arbitrary JSON payload" }
+        }
       }
     }
   },
@@ -33,8 +41,12 @@ const tools = [
     type: "function",
     function: {
       name: "js_exec",
-      description: "Run JavaScript code in a sandbox and return its stdout/result",
-      parameters: { type: "object", properties: { code: { type: "string" } }, required: ["code"] }
+      description: "Run JavaScript in a sandbox; return stdout/result as text",
+      parameters: {
+        type: "object",
+        properties: { code: { type: "string", description: "JavaScript code to run" } },
+        required: ["code"]
+      }
     }
   }
 ];
@@ -42,7 +54,7 @@ const tools = [
 function alertError(msg) {
   elAlerts.innerHTML = `<div class="alert alert-danger alert-dismissible fade show" role="alert">
     ${msg}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>`;
 }
 
@@ -61,8 +73,7 @@ async function callOpenAI() {
   });
   if (!r.ok) throw new Error("OpenAI call failed");
   const data = await r.json();
-  const msg = data.choices?.[0]?.message || {};
-  return msg;
+  return data.choices?.[0]?.message || {};
 }
 
 function runInSandbox(code) {
@@ -82,37 +93,43 @@ function runInSandbox(code) {
 
 async function handleToolCall(tc) {
   try {
-    if (tc.function?.name === "search") {
-      const { query } = JSON.parse(tc.function.arguments || "{}");
-      const r = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const name = tc.function?.name;
+    const args = JSON.parse(tc.function?.arguments || "{}");
+
+    if (name === "search") {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(args.query || "")}`);
       const data = await r.json();
       return JSON.stringify(data);
     }
-    if (tc.function?.name === "aipipe") {
-      const args = JSON.parse(tc.function.arguments || "{}");
+
+    if (name === "aipipe") {
       const r = await fetch(`/api/aipipe`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(args)
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ path: args.path, payload: args.payload })
       });
       const data = await r.json();
       return JSON.stringify(data);
     }
-    if (tc.function?.name === "js_exec") {
-      const { code } = JSON.parse(tc.function.arguments || "{}");
-      const out = await runInSandbox(code);
+
+    if (name === "js_exec") {
+      const out = await runInSandbox(args.code || "");
       return typeof out === "string" ? out : JSON.stringify(out);
     }
-    return "Tool not implemented.";
+
+    return "ERROR: Unknown tool";
   } catch (e) {
     alertError(e.message);
     return `ERROR: ${e.message}`;
   }
 }
 
-// Core loop: ask model → run any tool calls → feed results back → stop when no tools needed
+// Core loop: ask model → execute tool_calls (if any) → feed results back → stop when none
 async function agentTurn() {
   const assistantMsg = await callOpenAI();
+
   if (assistantMsg.content) add("assistant", assistantMsg.content);
+
   if (assistantMsg.tool_calls?.length) {
     for (const tc of assistantMsg.tool_calls) {
       const toolResult = await handleToolCall(tc);
@@ -121,12 +138,10 @@ async function agentTurn() {
         tool_call_id: tc.id,
         content: toolResult
       });
-      add("tool", toolResult.slice(0, 800)); // preview
+      add("tool", toolResult.slice(0, 800));
     }
-    // After tool results, ask model again
+    // Ask model again with tool results
     await agentTurn();
-  } else {
-    // Done with tools; wait for next user message.
   }
 }
 
