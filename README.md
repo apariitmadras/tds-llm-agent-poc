@@ -1,12 +1,27 @@
-# LLM Agent POC (Browser)
+# LLM Agent (POC)
 
-A tiny browser-based LLM agent that calls tools using **OpenAI tool-calling**:
-- Google Search snippets (via SerpAPI or Google CSE)
-- AI Pipe proxy (optional)
-- Sandboxed JavaScript execution
+A tiny **browser-based agent** that chats with you and can call tools to get stuff done.  
+Tools included: **Web Search (Google CSE)**, **JavaScript Sandbox (`js_exec`)**, and **AI Pipe proxy**.  
+Built with a minimal Express server + vanilla JS UI. Deployed easily on **Railway**.
 
-Minimal Bootstrap UI with model picker & alerts. Designed for hackability.
+**Live demo:** https://tds-llm-agent-poc-production.up.railway.app/
 
-## How it works
-The page sends `messages` + `tools` to an Express proxy (`/api/openai`).  
-The model may return `tool_calls`; the browser runs each tool (`/api/search`, `/api/aipipe`, or sandboxed JS), appends the tool results as `role: "tool"` with `tool_call_id`, and asks the model again. This loop continues until the model stops requesting tools.
+---
+
+## Features
+
+- **Agent loop with OpenAI tool-calling**  
+  Assistant ↔ tool_calls ↔ tool results (linked via `tool_call_id`) until a final answer.
+- **Search tool (Google Programmable Search / CSE)**  
+  Returns top snippets to ground answers; falls back to `stub` if not configured.
+- **JavaScript execution tool (`js_exec`)**  
+  Executes code in an isolated iframe sandbox; previews output and surfaces errors.
+- **AI Pipe tool**  
+  Server-side proxy to any HTTP JSON endpoint (works out-of-the-box with Postman Echo).
+- **Clean UI**  
+  Model dropdown, chat window, Bootstrap alerts for errors, large-output trimming.
+
+---
+
+## Project Structure
+
