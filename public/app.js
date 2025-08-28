@@ -19,7 +19,9 @@ const tools = [
       description: "Return Google search snippets for a query",
       parameters: {
         type: "object",
-        properties: { query: { type: "string", description: "Search query" } },
+        properties: {
+          query: { type: "string", description: "Search query" }
+        },
         required: ["query"]
       }
     }
@@ -28,13 +30,18 @@ const tools = [
     type: "function",
     function: {
       name: "aipipe",
-      description: "Call an AI Pipe proxy with a path and payload",
+      description: "Call an AI Pipe proxy with a path and payload. Always send a JSON object in 'payload'.",
       parameters: {
         type: "object",
         properties: {
-          path: { type: "string", description: "Relative API path, e.g. /run" },
-          payload: { type: "object", description: "Arbitrary JSON payload" }
-        }
+          path: { type: "string", description: "Relative API path (default /run). For Postman Echo use /post." },
+          payload: {
+            type: "object",
+            description: "Arbitrary JSON object to send to the pipe",
+            additionalProperties: true
+          }
+        },
+        required: ["payload"] // ensure the model includes a payload
       }
     }
   },
@@ -61,7 +68,9 @@ function alertError(msg) {
 
 function add(role, text) {
   const who = role === "user" ? "🧑 You" : role === "assistant" ? "🤖 Agent" : "🔧 Tool";
-  elMsgs.innerHTML += `\n${who}: ${text}`;
+  const line = document.createElement("div");
+  line.textContent = `${who}: ${text}`;
+  elMsgs.appendChild(line);
   elMsgs.scrollTop = elMsgs.scrollHeight;
 }
 
@@ -107,10 +116,23 @@ async function handleToolCall(tc) {
     }
 
     if (name === "aipipe") {
+      // Normalize args for robust calls (e.g., Postman Echo via /post)
+      let p = args.path || "/run";
+      let payload = args.payload;
+
+      // If payload is a JSON string, parse it
+      if (typeof payload === "string") {
+        try { payload = JSON.parse(payload); } catch { /* ignore and treat as empty */ }
+      }
+      // Ensure payload is a plain object
+      if (payload == null || typeof payload !== "object" || Array.isArray(payload)) {
+        payload = {};
+      }
+
       const r = await fetch(`/api/aipipe`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ path: args.path, payload: args.payload })
+        body: JSON.stringify({ path: p, payload })
       });
       const data = await r.json();
       return JSON.stringify(data);
@@ -132,7 +154,7 @@ async function handleToolCall(tc) {
 async function agentTurn() {
   const assistantMsg = await callOpenAI();
 
-  // ✅ IMPORTANT: push the assistant message (with tool_calls) BEFORE sending tool results
+  // Push the assistant message (with tool_calls) BEFORE sending any tool results
   const envelope = {
     role: "assistant",
     content: assistantMsg.content ?? null
@@ -179,7 +201,7 @@ elSend.onclick = async () => {
   }
 };
 
-// (optional) enter key to send
+// (optional) press Enter to send
 elInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     elSend.click();
